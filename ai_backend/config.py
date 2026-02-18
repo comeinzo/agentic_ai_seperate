@@ -1,0 +1,5 @@
+DB_NAME = 'comienzonew'
+USER_NAME = 'postgres'
+PASSWORD ='jaTHU@12'
+HOST = 'localhost'
+PORT = '5432'
