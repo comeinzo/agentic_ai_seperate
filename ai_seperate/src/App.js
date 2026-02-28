@@ -23,7 +23,7 @@ const ICON_MAP = {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 export default function KPIDashboard() {
-  const [tables, setTables] = useState([]);
+  const [tableData, setTableData] = useState({ tables: [], views: [], grouped_tables: {} });
   const [selectedTable, setSelectedTable] = useState('');
   const [kpiData, setKpiData] = useState(null);
   const [insights, setInsights] = useState(null);
@@ -47,9 +47,11 @@ export default function KPIDashboard() {
       const response = await fetch(`${API_BASE_URL}/tables`);
       const data = await response.json();
       if (data.success) {
-        setTables(data.tables);
-        if (data.tables.length > 0) {
+        setTableData({ tables: data.tables || [], views: data.views || [], grouped_tables: data.grouped_tables || {} });
+        if (data.tables && data.tables.length > 0) {
           setSelectedTable(data.tables[0]);
+        } else if (data.views && data.views.length > 0) {
+          setSelectedTable(data.views[0]);
         }
       }
     } catch (error) {
@@ -343,9 +345,27 @@ export default function KPIDashboard() {
               onChange={(e) => setSelectedTable(e.target.value)}
               className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {tables.map(table => (
-                <option key={table} value={table}>{table}</option>
-              ))}
+              <optgroup label="Tables">
+                {tableData.tables.map(table => (
+                  <option key={table} value={table}>{table}</option>
+                ))}
+              </optgroup>
+              {tableData.views && tableData.views.length > 0 && (
+                <optgroup label="Views">
+                  {tableData.views.map(view => (
+                    <option key={view} value={view}>{view}</option>
+                  ))}
+                </optgroup>
+              )}
+              {tableData.grouped_tables && Object.keys(tableData.grouped_tables).length > 0 && (
+                Object.entries(tableData.grouped_tables).map(([referencedTable, referencingTables]) => (
+                  <optgroup key={referencedTable} label={`References ${referencedTable}`}>
+                    {referencingTables.map(table => (
+                      <option key={`${referencedTable}-${table}`} value={table}>{table}</option>
+                    ))}
+                  </optgroup>
+                ))
+              )}
             </select>
             <div className="ml-auto flex gap-2" data-html2canvas-ignore="true">
               <button

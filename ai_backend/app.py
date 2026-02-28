@@ -51,20 +51,69 @@ def list_available_tables():
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT table_name 
+            SELECT table_schema, table_name, table_type 
             FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            ORDER BY table_name
+            WHERE table_schema NOT IN ('information_schema', 'pg_catalog')
+            ORDER BY table_schema, table_name
         """)
         
-        tables = cursor.fetchall()
+        results = cursor.fetchall()
+        
+        tables = []
+        views = []
+        for schema, name, rel_type in results:
+            full_name = f"{schema}.{name}"
+            if rel_type == 'VIEW':
+                views.append(full_name)
+            else:
+                tables.append(full_name)
+                
+        # Also fetch Materialized Views
+        cursor.execute("""
+            SELECT schemaname, matviewname 
+            FROM pg_matviews
+            ORDER BY schemaname, matviewname
+        """)
+        mat_views = cursor.fetchall()
+        for schema, name in mat_views:
+            views.append(f"{schema}.{name}")
+            
+        # Fetch relationships to group tables
+        cursor.execute("""
+            SELECT
+                tc.table_schema AS referencing_schema,
+                tc.table_name AS referencing_table,
+                ccu.table_schema AS foreign_table_schema,
+                ccu.table_name AS foreign_table_name
+            FROM 
+                information_schema.table_constraints AS tc 
+                JOIN information_schema.constraint_column_usage AS ccu
+                  ON ccu.constraint_name = tc.constraint_name
+                  AND ccu.table_schema = tc.table_schema
+            WHERE 
+                tc.constraint_type = 'FOREIGN KEY'
+                AND tc.table_schema NOT IN ('information_schema', 'pg_catalog')
+        """)
+        
+        relationships = cursor.fetchall()
+        grouped_tables = {}
+        for ref_schema, ref_table, referenced_schema, referenced_table in relationships:
+            referencing_full = f"{ref_schema}.{ref_table}"
+            referenced_full = f"{referenced_schema}.{referenced_table}"
+            
+            if referenced_full not in grouped_tables:
+                grouped_tables[referenced_full] = []
+            
+            if referencing_full not in grouped_tables[referenced_full]:
+                grouped_tables[referenced_full].append(referencing_full)
+            
         cursor.close()
         conn.close()
         
-        return [table[0] for table in tables]
+        return {"tables": tables, "views": views, "grouped_tables": grouped_tables}
     except Exception as e:
         print(f"Error listing tables: {e}")
-        return []
+        return {"tables": [], "views": [], "grouped_tables": {}}
 
 
 def get_table_schema(table_name):
@@ -75,12 +124,25 @@ def get_table_schema(table_name):
         )
         cursor = conn.cursor()
         
+        if '.' in table_name:
+            schema_name, actual_table_name = table_name.split('.', 1)
+        else:
+            schema_name, actual_table_name = 'public', table_name
+
+        # Use pg_attribute to support Tables, Views, and Materialized Views
         cursor.execute("""
-            SELECT column_name, data_type, is_nullable
-            FROM information_schema.columns
-            WHERE table_name = %s
-            ORDER BY ordinal_position
-        """, (table_name,))
+            SELECT a.attname AS column_name,
+                   pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+                   (CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END) AS is_nullable
+            FROM pg_catalog.pg_attribute a
+            JOIN pg_catalog.pg_class c ON a.attrelid = c.oid
+            JOIN pg_catalog.pg_namespace n ON c.relnamespace = n.oid
+            WHERE n.nspname = %s 
+              AND c.relname = %s
+              AND a.attnum > 0 
+              AND NOT a.attisdropped
+            ORDER BY a.attnum
+        """, (schema_name, actual_table_name))
         
         columns = cursor.fetchall()
         
@@ -103,6 +165,54 @@ def get_table_schema(table_name):
         print(f"Error getting schema: {e}")
         return None
 
+
+def get_table_relationships(table_name):
+    """Fetch foreign key relationships for a specific table."""
+    try:
+        conn = psycopg2.connect(
+            host=HOST, port=PORT, database=DB_NAME, user=USER_NAME, password=PASSWORD
+        )
+        cursor = conn.cursor()
+        
+        if '.' in table_name:
+            schema_name, actual_table_name = table_name.split('.', 1)
+        else:
+            schema_name, actual_table_name = 'public', table_name
+
+        cursor.execute("""
+            SELECT
+                kcu.column_name, 
+                ccu.table_schema AS foreign_table_schema,
+                ccu.table_name AS foreign_table_name,
+                ccu.column_name AS foreign_column_name 
+            FROM 
+                information_schema.table_constraints AS tc 
+                JOIN information_schema.key_column_usage AS kcu
+                  ON tc.constraint_name = kcu.constraint_name
+                  AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage AS ccu
+                  ON ccu.constraint_name = tc.constraint_name
+                  AND ccu.table_schema = tc.table_schema
+            WHERE 
+                tc.constraint_type = 'FOREIGN KEY'
+                AND tc.table_schema = %s
+                AND tc.table_name = %s
+        """, (schema_name, actual_table_name))
+        
+        relationships = []
+        for col, f_schema, f_table, f_col in cursor.fetchall():
+            relationships.append({
+                "column": col,
+                "references_table": f"{f_schema}.{f_table}",
+                "references_column": f_col
+            })
+            
+        cursor.close()
+        conn.close()
+        return relationships
+    except Exception as e:
+        print(f"Error getting relationships: {e}")
+        return []
 
 
 def execute_sql(sql_query):
@@ -563,7 +673,7 @@ Instructions:
 1. Analyze the question carefully
 2. Identify the relevant columns from the schema
 3. Generate an efficient PostgreSQL query
-4. The table name is '{table_name}'
+4. The table name is '{table_name}'. If it contains a schema (e.g., schema.table), use the format "schema"."table" in the query.
 5. Return ONLY the SQL query without any explanation or markdown formatting.
 
 SQL Query:"""
@@ -763,11 +873,13 @@ def get_kpi_insights(table_name):
 def get_tables_for_ai():
     """Get list of available tables."""
     try:
-        tables = list_available_tables()
+        data = list_available_tables()
         return jsonify({
             'success': True,
-            'tables': tables,
-            'count': len(tables)
+            'tables': data.get('tables', []),
+            'views': data.get('views', []),
+            'grouped_tables': data.get('grouped_tables', {}),
+            'count': len(data.get('tables', [])) + len(data.get('views', []))
         })
     except Exception as e:
         return jsonify({
@@ -789,7 +901,11 @@ def generate_kpi_dashboard(table_name):
             }), 404
         
         # Get all data from table
-        full_data_query = f"SELECT * FROM {table_name}"
+        if '.' in table_name:
+            schema_name, actual_table_name = table_name.split('.', 1)
+            full_data_query = f'SELECT * FROM "{schema_name}"."{actual_table_name}"'
+        else:
+            full_data_query = f'SELECT * FROM "{table_name}"'
         full_df, error = execute_sql(full_data_query)
         
         if error or full_df is None or len(full_df) == 0:
@@ -805,6 +921,9 @@ def generate_kpi_dashboard(table_name):
         
         # Generate comprehensive data profile
         data_profile = generate_comprehensive_data_profile(full_df, table_name)
+        
+        # Inject explicit table relationships (Foreign Keys) into the profile
+        data_profile['relationships'] = get_table_relationships(table_name)
         
         # Use AI to determine appropriate KPIs using GEMINI
         kpi_structure = generate_kpi_structure_with_ai(
@@ -838,6 +957,13 @@ def generate_kpi_dashboard(table_name):
             'error': str(e)
         }), 500
 
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'success': True,
+        'message': 'Backend is healthy'
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5010, debug=True)
