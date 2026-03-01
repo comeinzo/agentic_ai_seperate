@@ -97,23 +97,57 @@ def list_available_tables():
         
         relationships = cursor.fetchall()
         grouped_tables = {}
+        
+        # Adjacency list for connected components
+        adj_list = {}
         for ref_schema, ref_table, referenced_schema, referenced_table in relationships:
             referencing_full = f"{ref_schema}.{ref_table}"
             referenced_full = f"{referenced_schema}.{referenced_table}"
             
+            # Legacy grouped_tables logic
             if referenced_full not in grouped_tables:
                 grouped_tables[referenced_full] = []
-            
             if referencing_full not in grouped_tables[referenced_full]:
                 grouped_tables[referenced_full].append(referencing_full)
+                
+            # Connect components logic
+            if referencing_full not in adj_list: adj_list[referencing_full] = set()
+            if referenced_full not in adj_list: adj_list[referenced_full] = set()
+            
+            adj_list[referencing_full].add(referenced_full)
+            adj_list[referenced_full].add(referencing_full)
+            
+        visited = set()
+        table_groups = []
+        
+        for table in adj_list.keys():
+            if table not in visited:
+                component = []
+                queue = [table]
+                visited.add(table)
+                while queue:
+                    curr = queue.pop(0)
+                    component.append(curr)
+                    for neighbor in adj_list[curr]:
+                        if neighbor not in visited:
+                            visited.add(neighbor)
+                            queue.append(neighbor)
+                
+                # Identify group with 2 or more related tables
+                if len(component) > 1:
+                    table_groups.append({
+                        "group_id": f"group_{len(table_groups) + 1}",
+                        "group_name": f"Group {len(table_groups) + 1} ({len(component)} tables)",
+                        "tables": component
+                    })
             
         cursor.close()
         conn.close()
         
-        return {"tables": tables, "views": views, "grouped_tables": grouped_tables}
+        return {"tables": tables, "views": views, "grouped_tables": grouped_tables, "table_groups": table_groups}
     except Exception as e:
         print(f"Error listing tables: {e}")
-        return {"tables": [], "views": [], "grouped_tables": {}}
+        return {"tables": [], "views": [], "grouped_tables": {}, "table_groups": []}
 
 
 def get_table_schema(table_name):
@@ -879,6 +913,7 @@ def get_tables_for_ai():
             'tables': data.get('tables', []),
             'views': data.get('views', []),
             'grouped_tables': data.get('grouped_tables', {}),
+            'table_groups': data.get('table_groups', []),
             'count': len(data.get('tables', [])) + len(data.get('views', []))
         })
     except Exception as e:
@@ -951,6 +986,149 @@ def generate_kpi_dashboard(table_name):
         
     except Exception as e:
         print(f"Error generating KPI dashboard: {e}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/dashboard/group', methods=['POST'])
+def generate_group_dashboard():
+    """Generate intelligent KPI dashboard for a group of tables using SQL generation."""
+    try:
+        data = request.json
+        tables = data.get('tables', [])
+        group_name = data.get('group_name', 'Group')
+        
+        if not tables:
+            return jsonify({'success': False, 'error': 'No tables provided'}), 400
+            
+        group_schema_text = ""
+        group_sample_data = ""
+        for table in tables:
+            st = get_table_schema(table)
+            if st:
+                group_schema_text += st + "\n"
+            
+            # Fetch a small sample of data to help AI understand values
+            try:
+                if '.' in table:
+                    schema_name, actual_table_name = table.split('.', 1)
+                    q = f'SELECT * FROM "{schema_name}"."{actual_table_name}" LIMIT 3'
+                else:
+                    q = f'SELECT * FROM "{table}" LIMIT 3'
+                
+                df, err = execute_sql(q)
+                if not err and df is not None and not df.empty:
+                    # Convert datetime to string
+                    for col in df.columns:
+                        if pd.api.types.is_datetime64_any_dtype(df[col]):
+                            df[col] = df[col].astype(str)
+                    group_sample_data += f"Sample Data for {table}:\n" + df.to_string(index=False) + "\n\n"
+            except Exception as e:
+                pass
+        
+        if not group_schema_text:
+            return jsonify({'success': False, 'error': 'Unable to fetch schema for the provided tables'}), 400
+
+        prompt = f"""You are an expert data analyst. Based on the following database schema and sample data for a group of related tables ({group_name}), 
+suggest 4 business KPIs and 4 charts that use these tables to provide meaningful insights. Use JOINs where appropriate to connect the data.
+
+CRITICAL SQL RULES for PostgreSQL:
+1. Use ILIKE or LOWER() for any string comparisons (e.g., status fields) to avoid case-sensitivity issues (e.g., LOWER(status) = 'delivered').
+2. Ensure columns used in GROUP BY are exactly the same as in the SELECT clause.
+3. For charts, if aggregating by date, use DATE_TRUNC('day', date_column) and alias it clearly.
+
+Schema:
+{group_schema_text}
+
+Sample Data:
+{group_sample_data}
+
+Respond ONLY with valid JSON in this exact structure:
+{{
+  "primary_kpis": [
+    {{
+      "name": "KPI Name",
+      "description": "What it measures",
+      "format": "number|currency|percentage",
+      "icon": "Users|DollarSign|ShoppingCart|Activity|TrendingUp",
+      "category": "financial|operational|customer",
+      "sql": "SELECT COUNT(*) FROM table1 JOIN table2 ON ... (MUST return a single numeric value)"
+    }}
+  ],
+  "charts": [
+    {{
+      "type": "bar|line|pie",
+      "title": "Chart Title",
+      "description": "Insight provided",
+      "x_axis": "column_for_x",
+      "y_axis": "column_for_y",
+      "sql": "SELECT category AS column_for_x, COUNT(*) AS column_for_y FROM table1 GROUP BY category LIMIT 10"
+    }}
+  ]
+}}"""
+
+        kpi_text = generate_content_with_fallback(prompt, genai.GenerationConfig(temperature=0.3), json_mode=True)
+        if not kpi_text:
+             raise ValueError("Failed to generate KPI structure from AI.")
+             
+        kpi_text = kpi_text.replace('```json', '').replace('```', '').strip()
+        kpi_structure = json.loads(kpi_text)
+        
+        kpi_values = []
+        for kpi in kpi_structure.get('primary_kpis', []):
+            try:
+                df, err = execute_sql(kpi['sql'])
+                if not err and df is not None and not df.empty:
+                    val = float(df.iloc[0, 0]) if pd.notna(df.iloc[0, 0]) else 0.0
+                else:
+                    val = 0.0
+            except Exception as e:
+                print(f"Error executing KPI SQL: {e}")
+                val = 0.0
+                
+            kpi_values.append({
+                'name': kpi.get('name', 'Unknown KPI'),
+                'value': val,
+                'format': kpi.get('format', 'number'),
+                'icon': kpi.get('icon', 'TrendingUp'),
+                'category': kpi.get('category', 'operational'),
+                'description': kpi.get('description', ''),
+                'change': 0.0,
+                'change_direction': 'neutral'
+            })
+                
+        chart_data_list = []
+        for chart in kpi_structure.get('charts', []):
+            try:
+                df, err = execute_sql(chart['sql'])
+                if not err and df is not None and not df.empty:
+                    chart_data = df.to_dict('records')
+                    chart_data_list.append({
+                        'type': chart.get('type', 'bar'),
+                        'title': chart.get('title', 'Chart'),
+                        'description': chart.get('description', ''),
+                        'x_axis': chart.get('x_axis', 'x'),
+                        'y_axis': chart.get('y_axis', 'y'),
+                        'data': chart_data
+                    })
+            except Exception as e:
+                print(f"Error executing Chart SQL: {e}")
+                
+        return jsonify({
+            'success': True,
+            'table_name': group_name,
+            'total_records': len(tables),
+            'kpi_structure': kpi_structure,
+            'kpi_values': kpi_values,
+            'chart_data': chart_data_list,
+            'data_profile': {'columns': {}} 
+        })
+        
+    except Exception as e:
+        print(f"Error generating group dashboard: {e}")
         print(traceback.format_exc())
         return jsonify({
             'success': False,

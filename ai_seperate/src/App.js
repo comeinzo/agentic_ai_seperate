@@ -23,10 +23,9 @@ const ICON_MAP = {
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 export default function KPIDashboard() {
-  const [tableData, setTableData] = useState({ tables: [], views: [], grouped_tables: {} });
+  const [tableData, setTableData] = useState({ tables: [], views: [], grouped_tables: {}, table_groups: [] });
   const [selectedTable, setSelectedTable] = useState('');
-  const [kpiData, setKpiData] = useState(null);
-  const [insights, setInsights] = useState(null);
+  const [groupsData, setGroupsData] = useState([]); // Array to store dashboard data for all groups
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -37,21 +36,33 @@ export default function KPIDashboard() {
   }, []);
 
   useEffect(() => {
-    if (selectedTable) {
-      loadKPIDashboard();
+    if (tableData.table_groups && tableData.table_groups.length > 0) {
+      loadAllGroupsDashboards(tableData.table_groups);
+    } else if (selectedTable) {
+      loadSingleTableDashboard(selectedTable);
     }
-  }, [selectedTable]);
+  }, [tableData.table_groups, selectedTable]);
 
   const fetchTables = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/tables`);
       const data = await response.json();
       if (data.success) {
-        setTableData({ tables: data.tables || [], views: data.views || [], grouped_tables: data.grouped_tables || {} });
-        if (data.tables && data.tables.length > 0) {
-          setSelectedTable(data.tables[0]);
-        } else if (data.views && data.views.length > 0) {
-          setSelectedTable(data.views[0]);
+        const newTableData = { 
+            tables: data.tables || [], 
+            views: data.views || [], 
+            grouped_tables: data.grouped_tables || {},
+            table_groups: data.table_groups || []
+        };
+        setTableData(newTableData);
+        // We no longer set selectedTable to a group immediately since we'll load all groups in the useEffect.
+        // But if there are no groups, we default to the first table.
+        if (!newTableData.table_groups || newTableData.table_groups.length === 0) {
+          if (newTableData.tables && newTableData.tables.length > 0) {
+            setSelectedTable(newTableData.tables[0]);
+          } else if (newTableData.views && newTableData.views.length > 0) {
+            setSelectedTable(newTableData.views[0]);
+          }
         }
       }
     } catch (error) {
@@ -59,34 +70,73 @@ export default function KPIDashboard() {
     }
   };
 
-  const loadKPIDashboard = async () => {
+  const loadAllGroupsDashboards = async (groups) => {
     setLoading(true);
+    setGroupsData([]); // Clear existing
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/dashboard/kpi/${selectedTable}`);
-      const data = await response.json();
-      if (data.success) {
-        setKpiData(data);
-        setLastUpdated(new Date());
-        
-        // Auto-generate insights
-        await generateInsights(data.kpi_values, data.chart_data);
-      }
+      const promises = groups.map(group => 
+        fetch(`${API_BASE_URL}/dashboard/group`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tables: group.tables, group_name: group.group_name })
+        }).then(res => res.json())
+      );
+      
+      const results = await Promise.all(promises);
+      const successfulGroups = results.filter(r => r.success);
+      setGroupsData(successfulGroups.map(g => ({ kpiData: g, insights: null }))); // Start without insights
+      setLastUpdated(new Date());
+
+      // Optionally fetch insights for each group (in background)
+      // For simplicity, we can skip individual group AI insights or load them incrementally
     } catch (error) {
-      console.error('Error loading KPI dashboard:', error);
+      console.error('Error loading all group dashboards:', error);
     }
     setLoading(false);
   };
 
-  const generateInsights = async (kpiValues, chartData) => {
+  const loadSingleTableDashboard = async (tableName) => {
+    if (!tableName || tableName.startsWith('GROUP::')) return;
+    setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/dashboard/kpi/insights/${selectedTable}`, {
+      const response = await fetch(`${API_BASE_URL}/dashboard/kpi/${tableName}`);
+      const data = await response.json();
+      if (data.success) {
+        setGroupsData([{ kpiData: data, insights: null }]);
+        setLastUpdated(new Date());
+        
+        // Auto-generate insights
+        generateInsights(0, tableName, data.kpi_values, data.chart_data);
+      }
+    } catch (error) {
+      console.error('Error loading single KPI dashboard:', error);
+    }
+    setLoading(false);
+  };
+
+  const handleRefresh = () => {
+    if (tableData.table_groups && tableData.table_groups.length > 0) {
+      loadAllGroupsDashboards(tableData.table_groups);
+    } else {
+      loadSingleTableDashboard(selectedTable);
+    }
+  };
+
+  const generateInsights = async (index, tableName, kpiValues, chartData) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/dashboard/kpi/insights/${tableName}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ kpi_values: kpiValues, chart_data: chartData })
       });
       const data = await response.json();
       if (data.success) {
-        setInsights(data.insights);
+        setGroupsData(prev => {
+           const newArr = [...prev];
+           newArr[index] = { ...newArr[index], insights: data.insights };
+           return newArr;
+        });
       }
     } catch (error) {
       console.error('Error generating insights:', error);
@@ -307,12 +357,12 @@ export default function KPIDashboard() {
     return styles[priority] || styles.medium;
   };
 
-  if (loading && !kpiData) {
+  if (loading && groupsData.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-center">
         <div className="text-center">
           <RefreshCw className="animate-spin mx-auto mb-4 text-blue-400" size={48} />
-          <p className="text-xl">Analyzing your data and generating KPIs...</p>
+          <p className="text-xl">Analyzing groups and generating KPIs...</p>
         </div>
       </div>
     );
@@ -345,31 +395,15 @@ export default function KPIDashboard() {
               onChange={(e) => setSelectedTable(e.target.value)}
               className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <optgroup label="Tables">
+              <optgroup label="Tables (Individual)">
                 {tableData.tables.map(table => (
                   <option key={table} value={table}>{table}</option>
                 ))}
               </optgroup>
-              {tableData.views && tableData.views.length > 0 && (
-                <optgroup label="Views">
-                  {tableData.views.map(view => (
-                    <option key={view} value={view}>{view}</option>
-                  ))}
-                </optgroup>
-              )}
-              {tableData.grouped_tables && Object.keys(tableData.grouped_tables).length > 0 && (
-                Object.entries(tableData.grouped_tables).map(([referencedTable, referencingTables]) => (
-                  <optgroup key={referencedTable} label={`References ${referencedTable}`}>
-                    {referencingTables.map(table => (
-                      <option key={`${referencedTable}-${table}`} value={table}>{table}</option>
-                    ))}
-                  </optgroup>
-                ))
-              )}
             </select>
             <div className="ml-auto flex gap-2" data-html2canvas-ignore="true">
               <button
-                onClick={loadKPIDashboard}
+                onClick={handleRefresh}
                 disabled={loading}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
               >
@@ -388,148 +422,113 @@ export default function KPIDashboard() {
           </div>
         </div>
 
-        {kpiData && (
-          <div className="space-y-6">
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {kpiData.kpi_values?.map((kpi, idx) => {
-                const IconComponent = getIcon(kpi.icon);
-                return (
-                  <div
-                    key={idx}
-                    className={`bg-gradient-to-br ${getCategoryColor(kpi.category)} backdrop-blur-lg rounded-xl p-6 border transition-all hover:scale-105`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="bg-slate-700/50 p-3 rounded-lg">
-                        <IconComponent size={24} className="text-blue-400" />
-                      </div>
-                      {getTrendIcon(kpi.change_direction)}
+        <div className="space-y-16">
+          {groupsData.length === 0 && !loading && (
+             <div className="text-center py-20 text-slate-400">
+               <p className="text-xl">No groups found or failed to generate dashboard.</p>
+             </div>
+          )}
+          {groupsData.map((group, groupIdx) => {
+             const { kpiData, insights } = group;
+             if (!kpiData) return null;
+             
+             return (
+               <div key={groupIdx} className="border border-slate-700/50 bg-slate-900/30 rounded-2xl p-6 shadow-2xl relative">
+                  <div className="absolute top-0 right-0 bg-blue-600 text-xs px-3 py-1 rounded-bl-xl rounded-tr-xl font-medium shadow-lg">
+                    {kpiData.table_name || `Dashboard ${groupIdx + 1}`}
+                  </div>
+                  
+                  <h2 className="text-2xl font-semibold mb-6 pb-2 border-b border-slate-700 max-w-fit">
+                    {kpiData.table_name || `Dashboard ${groupIdx + 1}`}
+                  </h2>
+
+                  <div className="space-y-6">
+                    {/* KPI Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {kpiData.kpi_values?.map((kpi, idx) => {
+                        const IconComponent = getIcon(kpi.icon);
+                        return (
+                          <div
+                            key={idx}
+                            className={`bg-gradient-to-br ${getCategoryColor(kpi.category)} backdrop-blur-lg rounded-xl p-6 border transition-all hover:scale-105`}
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="bg-slate-700/50 p-3 rounded-lg">
+                                <IconComponent size={24} className="text-blue-400" />
+                              </div>
+                              {getTrendIcon(kpi.change_direction)}
+                            </div>
+                            <h3 className="text-sm font-medium text-slate-400 mb-1">{kpi.name}</h3>
+                            <p className="text-3xl font-bold mb-1">{formatValue(kpi.value, kpi.format)}</p>
+                            <p className="text-xs text-slate-500">{kpi.description}</p>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <h3 className="text-sm font-medium text-slate-400 mb-1">{kpi.name}</h3>
-                    <p className="text-3xl font-bold mb-1">{formatValue(kpi.value, kpi.format)}</p>
-                    <p className="text-xs text-slate-500">{kpi.description}</p>
-                  </div>
-                );
-              })}
-            </div>
 
-            {/* Charts */}
-            {kpiData.chart_data && kpiData.chart_data.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {kpiData.chart_data.map((chart, idx) => (
-                  <div key={idx} className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
-                    <div className="mb-4">
-                      <h3 className="text-xl font-semibold mb-1">{chart.title}</h3>
-                      <p className="text-sm text-slate-400">{chart.description}</p>
-                    </div>
-                    {renderChart(chart)}
-                  </div>
-                ))}
-              </div>
-            )}
+                    {/* Charts */}
+                    {kpiData.chart_data && kpiData.chart_data.length > 0 && (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {kpiData.chart_data.map((chart, idx) => (
+                          <div key={idx} className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
+                            <div className="mb-4">
+                              <h3 className="text-xl font-semibold mb-1">{chart.title}</h3>
+                              <p className="text-sm text-slate-400">{chart.description}</p>
+                            </div>
+                            {renderChart(chart)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-            {/* AI Insights */}
-            {insights && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Key Observations */}
-                <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Activity className="text-blue-400" size={24} />
-                    <h3 className="text-xl font-semibold">Key Observations</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {insights.observations?.map((obs, idx) => (
-                      <div key={idx} className="flex items-start gap-3 bg-slate-700/30 rounded-lg p-3">
-                        <div className="bg-blue-500/20 rounded-full p-1 mt-0.5">
-                          <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                    {/* AI Insights */}
+                    {insights && (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Key Observations */}
+                        <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Activity className="text-blue-400" size={24} />
+                            <h3 className="text-xl font-semibold">Key Observations</h3>
+                          </div>
+                          <div className="space-y-2">
+                            {insights.observations?.map((obs, idx) => (
+                              <div key={idx} className="flex items-start gap-3 bg-slate-700/30 rounded-lg p-3">
+                                <div className="bg-blue-500/20 rounded-full p-1 mt-0.5">
+                                  <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                                </div>
+                                <p className="text-sm text-slate-300">{obs}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-sm text-slate-300">{obs}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Action Items */}
-                <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Target className="text-purple-400" size={24} />
-                    <h3 className="text-xl font-semibold">Action Items</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {insights.action_items?.map((item, idx) => (
-                      <div key={idx} className="bg-slate-700/30 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-medium text-sm">{item.title}</h4>
-                          <span className={`text-xs px-2 py-1 rounded-full border ${getPriorityBadge(item.priority)}`}>
-                            {item.priority}
-                          </span>
+                        {/* Action Items */}
+                        <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Target className="text-purple-400" size={24} />
+                            <h3 className="text-xl font-semibold">Action Items</h3>
+                          </div>
+                          <div className="space-y-3">
+                            {insights.action_items?.map((item, idx) => (
+                              <div key={idx} className="bg-slate-700/30 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <h4 className="font-medium text-sm">{item.title}</h4>
+                                  <span className={`text-xs px-2 py-1 rounded-full border ${getPriorityBadge(item.priority)}`}>
+                                    {item.priority}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-400">{item.description}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-sm text-slate-400">{item.description}</p>
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
-
-                {/* Opportunities */}
-                <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Lightbulb className="text-yellow-400" size={24} />
-                    <h3 className="text-xl font-semibold">Opportunities</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {insights.opportunities?.map((opp, idx) => (
-                      <div key={idx} className="flex items-start gap-3 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-lg p-3">
-                        <Zap className="text-yellow-400 flex-shrink-0 mt-0.5" size={18} />
-                        <p className="text-sm text-slate-300">{opp}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Risks */}
-                <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
-                  <div className="flex items-center gap-2 mb-4">
-                    <AlertTriangle className="text-red-400" size={24} />
-                    <h3 className="text-xl font-semibold">Risks & Concerns</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {insights.risks?.map((risk, idx) => (
-                      <div key={idx} className="flex items-start gap-3 bg-gradient-to-r from-red-500/10 to-orange-500/10 border border-red-500/20 rounded-lg p-3">
-                        <AlertTriangle className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
-                        <p className="text-sm text-slate-300">{risk}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Data Summary */}
-            <div className="bg-slate-800/50 backdrop-blur-lg rounded-xl p-6 border border-slate-700/50">
-              <h3 className="text-xl font-semibold mb-4">Data Summary</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-blue-400">{kpiData.total_records.toLocaleString()}</p>
-                  <p className="text-sm text-slate-400 mt-1">Total Records</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-green-400">
-                    {kpiData.data_profile?.columns ? Object.keys(kpiData.data_profile.columns).length : 0}
-                  </p>
-                  <p className="text-sm text-slate-400 mt-1">Columns</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-purple-400">{kpiData.kpi_values?.length || 0}</p>
-                  <p className="text-sm text-slate-400 mt-1">Active KPIs</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-orange-400">{kpiData.chart_data?.length || 0}</p>
-                  <p className="text-sm text-slate-400 mt-1">Visualizations</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+               </div>
+             );
+          })}
+        </div>
       </div>
     </div>
   );

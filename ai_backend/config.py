@@ -1,4 +1,4 @@
-DB_NAME = 'comienzonew'
+DB_NAME = 'e-commerce_second'
 USER_NAME = 'postgres'
 PASSWORD ='jaTHU@12'
 HOST = 'localhost'
