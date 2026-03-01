@@ -256,7 +256,16 @@ def execute_sql(sql_query):
             host=HOST, port=PORT, database=DB_NAME, user=USER_NAME, password=PASSWORD
         )
         
-        df = pd.read_sql_query(sql_query, conn)
+        cursor = conn.cursor()
+        cursor.execute(sql_query)
+        if cursor.description:
+            columns = [desc[0] for desc in cursor.description]
+            data = cursor.fetchall()
+            df = pd.DataFrame(data, columns=columns)
+        else:
+            df = pd.DataFrame()
+            
+        cursor.close()
         conn.close()
         
         return df, None
@@ -935,12 +944,23 @@ def generate_kpi_dashboard(table_name):
                 'error': f'Table {table_name} not found'
             }), 404
         
+        # Get filter params if any
+        filter_col = request.args.get('filter_column')
+        filter_val = request.args.get('filter_value')
+        
         # Get all data from table
         if '.' in table_name:
             schema_name, actual_table_name = table_name.split('.', 1)
             full_data_query = f'SELECT * FROM "{schema_name}"."{actual_table_name}"'
         else:
             full_data_query = f'SELECT * FROM "{table_name}"'
+            
+        # Apply filter to the full data query if provided
+        if filter_col and filter_val:
+            # Basic sanitization
+            safe_val = str(filter_val).replace("'", "''")
+            full_data_query += f' WHERE "{filter_col}" = \'{safe_val}\''
+            
         full_df, error = execute_sql(full_data_query)
         
         if error or full_df is None or len(full_df) == 0:
@@ -1000,6 +1020,8 @@ def generate_group_dashboard():
         data = request.json
         tables = data.get('tables', [])
         group_name = data.get('group_name', 'Group')
+        filter_col = data.get('filter_column')
+        filter_val = data.get('filter_value')
         
         if not tables:
             return jsonify({'success': False, 'error': 'No tables provided'}), 400
@@ -1032,6 +1054,18 @@ def generate_group_dashboard():
         if not group_schema_text:
             return jsonify({'success': False, 'error': 'Unable to fetch schema for the provided tables'}), 400
 
+        filter_instruction = ""
+        if filter_col and filter_val:
+            # We want AI to explicitly add this WHERE clause to all generated SQLs.
+            safe_val = str(filter_val).replace("'", "''")
+            filter_instruction = f"""
+CRITICAL DRILL-DOWN REQUIREMENT: 
+The user is drilling down into the data. You MUST add the following WHERE clause to EVERY SINGLE SQL query you generate for both KPIs and charts:
+WHERE "{filter_col}" = '{safe_val}'
+Make sure to apply the table alias if joining (e.g., t1."{filter_col}" = '{safe_val}' or "{filter_col}" = '{safe_val}' depending on the query).
+If the column is not in a specific table being queried, then you should not include it, but wherever logically possible, this filter MUST drastically restrict the data.
+"""
+
         prompt = f"""You are an expert data analyst. Based on the following database schema and sample data for a group of related tables ({group_name}), 
 suggest 4 business KPIs and 4 charts that use these tables to provide meaningful insights. Use JOINs where appropriate to connect the data.
 
@@ -1039,6 +1073,7 @@ CRITICAL SQL RULES for PostgreSQL:
 1. Use ILIKE or LOWER() for any string comparisons (e.g., status fields) to avoid case-sensitivity issues (e.g., LOWER(status) = 'delivered').
 2. Ensure columns used in GROUP BY are exactly the same as in the SELECT clause.
 3. For charts, if aggregating by date, use DATE_TRUNC('day', date_column) and alias it clearly.
+{filter_instruction}
 
 Schema:
 {group_schema_text}
@@ -1082,11 +1117,18 @@ Respond ONLY with valid JSON in this exact structure:
             try:
                 df, err = execute_sql(kpi['sql'])
                 if not err and df is not None and not df.empty:
-                    val = float(df.iloc[0, 0]) if pd.notna(df.iloc[0, 0]) else 0.0
+                    raw_val = df.iloc[0, 0]
+                    if pd.notna(raw_val):
+                        try:
+                            val = float(raw_val)
+                        except (ValueError, TypeError):
+                            val = str(raw_val)
+                    else:
+                        val = 0.0
                 else:
                     val = 0.0
             except Exception as e:
-                print(f"Error executing KPI SQL: {e}")
+                print(f"Error executing KPI SQL for {kpi.get('name', 'Unknown')}: {e}")
                 val = 0.0
                 
             kpi_values.append({

@@ -29,19 +29,45 @@ export default function KPIDashboard() {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [dashboardFilter, setDashboardFilter] = useState({});
   const dashboardRef = useRef(null);
+
+  // Keep track of previous filters to detect WHICH group changed
+  const previousFilterRef = useRef({});
 
   useEffect(() => {
     fetchTables();
   }, []);
 
+  // Initial dashboard load on table group fetch
   useEffect(() => {
-    if (tableData.table_groups && tableData.table_groups.length > 0) {
+    if (tableData.table_groups && tableData.table_groups.length > 0 && groupsData.length === 0) {
       loadAllGroupsDashboards(tableData.table_groups);
-    } else if (selectedTable) {
+    } else if (selectedTable && groupsData.length === 0) {
       loadSingleTableDashboard(selectedTable);
     }
   }, [tableData.table_groups, selectedTable]);
+
+  // Handle individual filter updates natively without reloading everything
+  useEffect(() => {
+    // Determine which groups need updating by comparing to ref
+    const changedGroups = Object.keys(dashboardFilter).filter(
+        (groupName) => dashboardFilter[groupName] !== previousFilterRef.current[groupName]
+    );
+    
+    // Also find groups where the filter was REMOVED
+    const removedGroups = Object.keys(previousFilterRef.current).filter(
+        (groupName) => !dashboardFilter[groupName]
+    );
+
+    const allChangedGroupNames = [...new Set([...changedGroups, ...removedGroups])];
+    
+    if (allChangedGroupNames.length > 0) {
+       updateDashboardsForGroups(allChangedGroupNames);
+       previousFilterRef.current = { ...dashboardFilter };
+    }
+    
+  }, [dashboardFilter]);
 
   const fetchTables = async () => {
     try {
@@ -75,32 +101,101 @@ export default function KPIDashboard() {
     setGroupsData([]); // Clear existing
     
     try {
-      const promises = groups.map(group => 
-        fetch(`${API_BASE_URL}/dashboard/group`, {
+      const promises = groups.map(group => {
+        const payload = { tables: group.tables, group_name: group.group_name };
+        if (dashboardFilter[group.group_name]) {
+          payload.filter_column = dashboardFilter[group.group_name].column;
+          payload.filter_value = dashboardFilter[group.group_name].value;
+        }
+        return fetch(`${API_BASE_URL}/dashboard/group`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tables: group.tables, group_name: group.group_name })
-        }).then(res => res.json())
-      );
+            body: JSON.stringify(payload)
+        }).then(res => res.json());
+      });
       
       const results = await Promise.all(promises);
       const successfulGroups = results.filter(r => r.success);
-      setGroupsData(successfulGroups.map(g => ({ kpiData: g, insights: null }))); // Start without insights
+      setGroupsData(successfulGroups.map(g => ({ kpiData: g, insights: null }))); 
       setLastUpdated(new Date());
 
-      // Optionally fetch insights for each group (in background)
-      // For simplicity, we can skip individual group AI insights or load them incrementally
     } catch (error) {
       console.error('Error loading all group dashboards:', error);
     }
     setLoading(false);
   };
 
+  const updateDashboardsForGroups = async (groupNamesToUpdate) => {
+     // Don't set global loading state, maybe show a local spinner later if desired
+     try {
+       for (const groupName of groupNamesToUpdate) {
+         // Find if it's a grouped table or a single table
+         const targetGroup = tableData.table_groups?.find(g => g.group_name === groupName || g.table_name === groupName);
+         
+         if (targetGroup) {
+             // It's a Group Dashboard
+             const payload = { tables: targetGroup.tables, group_name: targetGroup.group_name };
+             if (dashboardFilter[groupName]) {
+                 payload.filter_column = dashboardFilter[groupName].column;
+                 payload.filter_value = dashboardFilter[groupName].value;
+             }
+             
+             const response = await fetch(`${API_BASE_URL}/dashboard/group`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+             });
+             const newData = await response.json();
+             
+             if (newData.success) {
+                 // Replace ONLY this specific data block
+                 setGroupsData(prev => prev.map(item => {
+                     const itemGroupIdentifier = item.kpiData.table_name || item.kpiData.group_name;
+                     if (itemGroupIdentifier === groupName || item.kpiData.table_name === groupName) {
+                         return { kpiData: newData, insights: null }; // Reset insights for new data
+                     }
+                     return item;
+                 }));
+             }
+         } else {
+            // It's a Single Table Dashboard
+            const queryParams = new URLSearchParams();
+            if (dashboardFilter[groupName]) {
+              queryParams.append('filter_column', dashboardFilter[groupName].column);
+              queryParams.append('filter_value', dashboardFilter[groupName].value);
+            }
+            const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+            const response = await fetch(`${API_BASE_URL}/dashboard/kpi/${groupName}${queryString}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                setGroupsData(prev => prev.map(item => {
+                    if (item.kpiData.table_name === groupName) {
+                        return { kpiData: data, insights: null };
+                    }
+                    return item;
+                }));
+                generateInsights(0, groupName, data.kpi_values, data.chart_data);
+            }
+         }
+       }
+       setLastUpdated(new Date());
+     } catch (err) {
+         console.error("Error specifically updating dashboards: ", err)
+     }
+  };
+
   const loadSingleTableDashboard = async (tableName) => {
     if (!tableName || tableName.startsWith('GROUP::')) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/dashboard/kpi/${tableName}`);
+      const queryParams = new URLSearchParams();
+      if (dashboardFilter[tableName]) {
+        queryParams.append('filter_column', dashboardFilter[tableName].column);
+        queryParams.append('filter_value', dashboardFilter[tableName].value);
+      }
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+      const response = await fetch(`${API_BASE_URL}/dashboard/kpi/${tableName}${queryString}`);
       const data = await response.json();
       if (data.success) {
         setGroupsData([{ kpiData: data, insights: null }]);
@@ -222,13 +317,21 @@ export default function KPIDashboard() {
   const formatValue = (value, format) => {
     if (value === null || value === undefined) return 'N/A';
     
+    // Ensure value is a Number for formatting methods
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+
+    // If it's completely un-parsable (NaN) but was somehow passed through, return it safely as a string
+    if (isNaN(numValue)) {
+      return value.toString();
+    }
+    
     switch (format) {
       case 'currency':
-        return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        return `$${numValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
       case 'percentage':
-        return `${value.toFixed(2)}%`;
+        return `${numValue.toFixed(2)}%`;
       case 'number':
-        return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        return numValue.toLocaleString(undefined, { maximumFractionDigits: 2 });
       default:
         return value.toString();
     }
@@ -255,10 +358,26 @@ export default function KPIDashboard() {
     return colors[category] || colors.operational;
   };
 
-  const renderChart = (chartConfig) => {
+  const renderChart = (chartConfig, groupIdentifier) => {
     const { type, title, data, x_axis, y_axis } = chartConfig;
 
     if (!data || data.length === 0) return null;
+
+    const handleDataClick = (dataPoint) => {
+      let val = dataPoint[x_axis];
+      if (val === undefined && dataPoint.payload) {
+          val = dataPoint.payload[x_axis];
+      }
+      if (val === undefined) {
+         val = dataPoint.name;
+      }
+      if (val !== undefined && val !== null) {
+        setDashboardFilter(prev => ({
+           ...prev,
+           [groupIdentifier]: { column: x_axis, value: val }
+        }));
+      }
+    };
 
     const chartProps = {
       data,
@@ -278,7 +397,7 @@ export default function KPIDashboard() {
                 labelStyle={{ color: '#f3f4f6' }}
               />
               <Legend />
-              <Bar dataKey={y_axis} fill="#3b82f6" radius={[8, 8, 0, 0]} />
+              <Bar dataKey={y_axis} fill="#3b82f6" radius={[8, 8, 0, 0]} onClick={handleDataClick} cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -295,7 +414,7 @@ export default function KPIDashboard() {
                 labelStyle={{ color: '#f3f4f6' }}
               />
               <Legend />
-              <Line type="monotone" dataKey={y_axis} stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6' }} />
+              <Line type="monotone" dataKey={y_axis} stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6' }} activeDot={{ onClick: (e, payload) => handleDataClick(payload ? payload.payload : {}), cursor: 'pointer' }} />
             </LineChart>
           </ResponsiveContainer>
         );
@@ -312,7 +431,7 @@ export default function KPIDashboard() {
                 labelStyle={{ color: '#f3f4f6' }}
               />
               <Legend />
-              <Area type="monotone" dataKey={y_axis} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
+              <Area type="monotone" dataKey={y_axis} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} activeDot={{ onClick: (e, payload) => handleDataClick(payload ? payload.payload : {}), cursor: 'pointer' }} />
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -329,6 +448,8 @@ export default function KPIDashboard() {
                 cy="50%"
                 outerRadius={100}
                 label
+                onClick={handleDataClick}
+                cursor="pointer"
               >
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -387,21 +508,9 @@ export default function KPIDashboard() {
             )}
           </div>
 
-          {/* Table Selector */}
-          <div className="flex items-center gap-4 bg-slate-800/50 backdrop-blur-lg rounded-xl p-4 border border-slate-700/50">
-            <label className="text-sm font-medium">Table:</label>
-            <select
-              value={selectedTable}
-              onChange={(e) => setSelectedTable(e.target.value)}
-              className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <optgroup label="Tables (Individual)">
-                {tableData.tables.map(table => (
-                  <option key={table} value={table}>{table}</option>
-                ))}
-              </optgroup>
-            </select>
-            <div className="ml-auto flex gap-2" data-html2canvas-ignore="true">
+          {/* Controls */}
+          <div className="flex items-center justify-end bg-slate-800/50 backdrop-blur-lg rounded-xl p-4 border border-slate-700/50">
+            <div className="flex gap-2" data-html2canvas-ignore="true">
               <button
                 onClick={handleRefresh}
                 disabled={loading}
@@ -430,17 +539,35 @@ export default function KPIDashboard() {
           )}
           {groupsData.map((group, groupIdx) => {
              const { kpiData, insights } = group;
-             if (!kpiData) return null;
-             
+             const groupNameIdentifier = kpiData.table_name || `Dashboard ${groupIdx + 1}`;
              return (
                <div key={groupIdx} className="border border-slate-700/50 bg-slate-900/30 rounded-2xl p-6 shadow-2xl relative">
                   <div className="absolute top-0 right-0 bg-blue-600 text-xs px-3 py-1 rounded-bl-xl rounded-tr-xl font-medium shadow-lg">
-                    {kpiData.table_name || `Dashboard ${groupIdx + 1}`}
+                    {groupNameIdentifier}
                   </div>
                   
-                  <h2 className="text-2xl font-semibold mb-6 pb-2 border-b border-slate-700 max-w-fit">
-                    {kpiData.table_name || `Dashboard ${groupIdx + 1}`}
-                  </h2>
+                  <div className="flex items-center justify-between mb-6 pb-2 border-b border-slate-700">
+                    <h2 className="text-2xl font-semibold">
+                      {groupNameIdentifier}
+                    </h2>
+                    {/* Render active filter for this specifically scoped group */}
+                    {dashboardFilter[groupNameIdentifier] && (
+                      <div className="flex items-center gap-2 bg-blue-500/20 border border-blue-500/40 text-blue-300 px-3 py-1.5 rounded-lg text-sm">
+                        <span>Filtered by <strong>{dashboardFilter[groupNameIdentifier].column}</strong> = {dashboardFilter[groupNameIdentifier].value}</span>
+                        <button 
+                          onClick={() => setDashboardFilter(prev => { 
+                            const newFilters = {...prev}; 
+                            delete newFilters[groupNameIdentifier]; 
+                            return newFilters; 
+                          })}
+                          className="ml-2 hover:text-white bg-blue-500/20 hover:bg-blue-500/40 p-1 rounded-full transition-colors flex items-center justify-center w-5 h-5 leading-none"
+                          title="Clear filter"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="space-y-6">
                     {/* KPI Cards */}
@@ -475,7 +602,7 @@ export default function KPIDashboard() {
                               <h3 className="text-xl font-semibold mb-1">{chart.title}</h3>
                               <p className="text-sm text-slate-400">{chart.description}</p>
                             </div>
-                            {renderChart(chart)}
+                            {renderChart(chart, groupNameIdentifier)}
                           </div>
                         ))}
                       </div>
