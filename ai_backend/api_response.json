@@ -1,0 +1,696 @@
+{
+  "chart_data": [
+    {
+      "data": [
+        {
+          "is_forecast": false,
+          "sale_date": "Mon, 05 Feb 2024 00:00:00 GMT",
+          "selling_price": 1850000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Mon, 25 Mar 2024 00:00:00 GMT",
+          "selling_price": 1800000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Mon, 15 Jan 2024 00:00:00 GMT",
+          "selling_price": 1650000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Fri, 15 Mar 2024 00:00:00 GMT",
+          "selling_price": 1450000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Wed, 10 Jan 2024 00:00:00 GMT",
+          "selling_price": 980000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Wed, 20 Mar 2024 00:00:00 GMT",
+          "selling_price": 920000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Tue, 20 Feb 2024 00:00:00 GMT",
+          "selling_price": 750000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Fri, 08 Mar 2024 00:00:00 GMT",
+          "selling_price": 690000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Sat, 10 Feb 2024 00:00:00 GMT",
+          "selling_price": 620000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Fri, 01 Mar 2024 00:00:00 GMT",
+          "selling_price": 580000.0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +1",
+          "selling_price": 240666.66666666605
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +2",
+          "selling_price": 79151.51515151467
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +3",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +4",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +5",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +6",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +7",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +8",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +9",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +10",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +11",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +12",
+          "selling_price": 0
+        }
+      ],
+      "description": "Compares total sales revenue across different months to identify peak sales periods.",
+      "title": "Monthly Sales Revenue",
+      "type": "bar",
+      "x_axis": "sale_date",
+      "y_axis": "selling_price"
+    },
+    {
+      "data": [
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Wed, 10 Jan 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Mon, 15 Jan 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Mon, 05 Feb 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Sat, 10 Feb 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Tue, 20 Feb 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Fri, 01 Mar 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Fri, 08 Mar 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Fri, 15 Mar 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Wed, 20 Mar 2024 00:00:00 GMT"
+        },
+        {
+          "is_forecast": false,
+          "quantity": 1,
+          "sale_date": "Mon, 25 Mar 2024 00:00:00 GMT"
+        }
+      ],
+      "description": "Tracks the total number of cars sold each month, highlighting seasonal trends.",
+      "title": "Monthly Sales Quantity",
+      "type": "line",
+      "x_axis": "sale_date",
+      "y_axis": "quantity"
+    },
+    {
+      "data": [
+        {
+          "is_forecast": false,
+          "model_id": 3,
+          "selling_price": 1850000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 10,
+          "selling_price": 1800000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 2,
+          "selling_price": 1650000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 8,
+          "selling_price": 1450000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 1,
+          "selling_price": 980000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 9,
+          "selling_price": 920000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 5,
+          "selling_price": 750000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 7,
+          "selling_price": 690000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 4,
+          "selling_price": 620000.0
+        },
+        {
+          "is_forecast": false,
+          "model_id": 6,
+          "selling_price": 580000.0
+        }
+      ],
+      "description": "Compares the revenue generated by different car models to identify best-selling models.",
+      "title": "Sales Revenue by Model",
+      "type": "bar",
+      "x_axis": "model_id",
+      "y_axis": "selling_price"
+    },
+    {
+      "data": [
+        {
+          "dealer_id": 3,
+          "is_forecast": false,
+          "selling_price": 1850000.0
+        },
+        {
+          "dealer_id": 10,
+          "is_forecast": false,
+          "selling_price": 1800000.0
+        },
+        {
+          "dealer_id": 2,
+          "is_forecast": false,
+          "selling_price": 1650000.0
+        },
+        {
+          "dealer_id": 8,
+          "is_forecast": false,
+          "selling_price": 1450000.0
+        },
+        {
+          "dealer_id": 1,
+          "is_forecast": false,
+          "selling_price": 980000.0
+        },
+        {
+          "dealer_id": 9,
+          "is_forecast": false,
+          "selling_price": 920000.0
+        },
+        {
+          "dealer_id": 5,
+          "is_forecast": false,
+          "selling_price": 750000.0
+        },
+        {
+          "dealer_id": 7,
+          "is_forecast": false,
+          "selling_price": 690000.0
+        },
+        {
+          "dealer_id": 4,
+          "is_forecast": false,
+          "selling_price": 620000.0
+        },
+        {
+          "dealer_id": 6,
+          "is_forecast": false,
+          "selling_price": 580000.0
+        }
+      ],
+      "description": "Compares the revenue generated by different dealerships to identify top-performing dealers.",
+      "title": "Sales Revenue by Dealer",
+      "type": "bar",
+      "x_axis": "dealer_id",
+      "y_axis": "selling_price"
+    },
+    {
+      "data": [
+        {
+          "is_forecast": false,
+          "sale_date": "Mon, 05 Feb 2024 00:00:00 GMT",
+          "selling_price": 1850000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Mon, 25 Mar 2024 00:00:00 GMT",
+          "selling_price": 1800000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Mon, 15 Jan 2024 00:00:00 GMT",
+          "selling_price": 1650000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Fri, 15 Mar 2024 00:00:00 GMT",
+          "selling_price": 1450000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Wed, 10 Jan 2024 00:00:00 GMT",
+          "selling_price": 980000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Wed, 20 Mar 2024 00:00:00 GMT",
+          "selling_price": 920000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Tue, 20 Feb 2024 00:00:00 GMT",
+          "selling_price": 750000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Fri, 08 Mar 2024 00:00:00 GMT",
+          "selling_price": 690000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Sat, 10 Feb 2024 00:00:00 GMT",
+          "selling_price": 620000.0
+        },
+        {
+          "is_forecast": false,
+          "sale_date": "Fri, 01 Mar 2024 00:00:00 GMT",
+          "selling_price": 580000.0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +1",
+          "selling_price": 240666.66666666605
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +2",
+          "selling_price": 79151.51515151467
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +3",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +4",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +5",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +6",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +7",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +8",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +9",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +10",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +11",
+          "selling_price": 0
+        },
+        {
+          "is_forecast": true,
+          "sale_date": "Future +12",
+          "selling_price": 0
+        }
+      ],
+      "description": "Forecasts the total sales revenue for the next 12 months based on historical data.",
+      "title": "Projected Sales Revenue for Next 1 Year",
+      "type": "line",
+      "x_axis": "sale_date",
+      "y_axis": "selling_price"
+    }
+  ],
+  "data_profile": {
+    "columns": {
+      "customer_id": {
+        "data_type": "numeric",
+        "max": 10.0,
+        "mean": 5.5,
+        "median": 5.5,
+        "min": 1.0,
+        "name": "customer_id",
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "std": 3.0276503540974917,
+        "type": "int64",
+        "unique_count": 10
+      },
+      "dealer_id": {
+        "data_type": "numeric",
+        "max": 10.0,
+        "mean": 5.5,
+        "median": 5.5,
+        "min": 1.0,
+        "name": "dealer_id",
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "std": 3.0276503540974917,
+        "type": "int64",
+        "unique_count": 10
+      },
+      "model_id": {
+        "data_type": "numeric",
+        "max": 10.0,
+        "mean": 5.5,
+        "median": 5.5,
+        "min": 1.0,
+        "name": "model_id",
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "std": 3.0276503540974917,
+        "type": "int64",
+        "unique_count": 10
+      },
+      "quantity": {
+        "data_type": "numeric",
+        "max": 1.0,
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "name": "quantity",
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "std": 0.0,
+        "type": "int64",
+        "unique_count": 1
+      },
+      "sale_date": {
+        "data_type": "date",
+        "name": "sale_date",
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "type": "object",
+        "unique_count": 10
+      },
+      "sale_id": {
+        "data_type": "numeric",
+        "max": 10.0,
+        "mean": 5.5,
+        "median": 5.5,
+        "min": 1.0,
+        "name": "sale_id",
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "std": 3.0276503540974917,
+        "type": "int64",
+        "unique_count": 10
+      },
+      "selling_price": {
+        "data_type": "categorical",
+        "name": "selling_price",
+        "null_count": 0,
+        "null_percentage": 0.0,
+        "top_values": {
+          "1650000.00": 1,
+          "1850000.00": 1,
+          "620000.00": 1,
+          "750000.00": 1,
+          "980000.00": 1
+        },
+        "type": "object",
+        "unique_count": 10
+      }
+    },
+    "relationships": [
+      {
+        "column": "model_id",
+        "references_column": "model_id",
+        "references_table": "public.car_model"
+      },
+      {
+        "column": "dealer_id",
+        "references_column": "dealer_id",
+        "references_table": "public.dealer"
+      },
+      {
+        "column": "customer_id",
+        "references_column": "customer_id",
+        "references_table": "public.customer"
+      }
+    ],
+    "table_name": "public.car_sales",
+    "total_columns": 7,
+    "total_rows": 10
+  },
+  "kpi_structure": {
+    "charts": [
+      {
+        "aggregation": "sum",
+        "description": "Compares total sales revenue across different months to identify peak sales periods.",
+        "is_forecast": true,
+        "limit": 12,
+        "title": "Monthly Sales Revenue",
+        "type": "bar",
+        "x_axis": "sale_date",
+        "y_axis": "selling_price"
+      },
+      {
+        "aggregation": "sum",
+        "description": "Tracks the total number of cars sold each month, highlighting seasonal trends.",
+        "is_forecast": false,
+        "limit": 12,
+        "title": "Monthly Sales Quantity",
+        "type": "line",
+        "x_axis": "sale_date",
+        "y_axis": "quantity"
+      },
+      {
+        "aggregation": "sum",
+        "description": "Compares the revenue generated by different car models to identify best-selling models.",
+        "is_forecast": false,
+        "limit": 10,
+        "title": "Sales Revenue by Model",
+        "type": "bar",
+        "x_axis": "model_id",
+        "y_axis": "selling_price"
+      },
+      {
+        "aggregation": "sum",
+        "description": "Compares the revenue generated by different dealerships to identify top-performing dealers.",
+        "is_forecast": false,
+        "limit": 10,
+        "title": "Sales Revenue by Dealer",
+        "type": "bar",
+        "x_axis": "dealer_id",
+        "y_axis": "selling_price"
+      },
+      {
+        "aggregation": "sum",
+        "description": "Forecasts the total sales revenue for the next 12 months based on historical data.",
+        "is_forecast": true,
+        "limit": 12,
+        "title": "Projected Sales Revenue for Next 1 Year",
+        "type": "line",
+        "x_axis": "sale_date",
+        "y_axis": "selling_price"
+      }
+    ],
+    "primary_kpis": [
+      {
+        "aggregation": "sum",
+        "calculation": "selling_price * quantity",
+        "category": "Sales",
+        "description": "The total revenue generated from car sales.",
+        "format": "currency",
+        "icon": "currency_exchange",
+        "name": "Total Revenue"
+      },
+      {
+        "aggregation": "avg",
+        "calculation": "selling_price",
+        "category": "Sales",
+        "description": "The average price at which cars are sold.",
+        "format": "currency",
+        "icon": "attach_money",
+        "name": "Average Selling Price"
+      },
+      {
+        "aggregation": "sum",
+        "calculation": "quantity",
+        "category": "Sales",
+        "description": "The total number of cars sold.",
+        "format": "number",
+        "icon": "shopping_cart",
+        "name": "Total Sales Quantity"
+      },
+      {
+        "aggregation": "count",
+        "calculation": "sale_id",
+        "category": "Sales",
+        "description": "The total count of individual sales transactions.",
+        "format": "number",
+        "icon": "receipt",
+        "name": "Number of Sales Transactions"
+      }
+    ],
+    "segments": [
+      {
+        "aggregation": "sum",
+        "calculation": "model_id, selling_price, quantity",
+        "description": "Breaks down total sales revenue and quantity by car model to understand product performance.",
+        "name": "Sales by Model"
+      },
+      {
+        "aggregation": "sum",
+        "calculation": "dealer_id, selling_price, quantity",
+        "description": "Segments sales performance by dealer to identify top performers and areas for improvement.",
+        "name": "Sales by Dealer"
+      },
+      {
+        "aggregation": "sum",
+        "calculation": "customer_id, selling_price, quantity",
+        "description": "Analyzes sales patterns based on customer demographics (if available in customer table) to understand customer preferences.",
+        "name": "Sales by Customer"
+      }
+    ],
+    "trends": [
+      {
+        "aggregation": "sum",
+        "calculation": "sale_date, selling_price, quantity",
+        "description": "Analyzes the month-over-month change in sales revenue and quantity to identify growth or decline patterns.",
+        "name": "Monthly Sales Trend"
+      }
+    ]
+  },
+  "kpi_values": [
+    {
+      "category": "Sales",
+      "change": 0.0,
+      "change_direction": "neutral",
+      "description": "The total revenue generated from car sales.",
+      "format": "currency",
+      "icon": "currency_exchange",
+      "name": "Total Revenue",
+      "value": 0
+    },
+    {
+      "category": "Sales",
+      "change": 0.0,
+      "change_direction": "neutral",
+      "description": "The average price at which cars are sold.",
+      "format": "currency",
+      "icon": "attach_money",
+      "name": "Average Selling Price",
+      "value": 1129000.0
+    },
+    {
+      "category": "Sales",
+      "change": 0.0,
+      "change_direction": "neutral",
+      "description": "The total number of cars sold.",
+      "format": "number",
+      "icon": "shopping_cart",
+      "name": "Total Sales Quantity",
+      "value": 10.0
+    },
+    {
+      "category": "Sales",
+      "change": 0.0,
+      "change_direction": "neutral",
+      "description": "The total count of individual sales transactions.",
+      "format": "number",
+      "icon": "receipt",
+      "name": "Number of Sales Transactions",
+      "value": 10.0
+    }
+  ],
+  "success": true,
+  "table_name": "public.car_sales",
+  "total_records": 10
+}

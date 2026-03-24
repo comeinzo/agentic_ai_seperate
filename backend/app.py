@@ -248,27 +248,6 @@ def get_table_relationships(table_name):
         print(f"Error getting relationships: {e}")
         return []
 
-def get_custom_table_prompt(table_name):
-    """Fetch custom prompt for a specific table from the database."""
-    try:
-        conn = psycopg2.connect(
-            host=HOST, port=PORT, database=DB_NAME, user=USER_NAME, password=PASSWORD
-        )
-        cursor = conn.cursor()
-        
-        query = "SELECT custom_prompt FROM public.table_prompts WHERE table_name = %s"
-        cursor.execute(query, (table_name,))
-        result = cursor.fetchone()
-        
-        cursor.close()
-        conn.close()
-        
-        if result:
-            return result[0]
-        return None
-    except Exception as e:
-        # Don't print error if table doesn't exist yet or simply not found
-        return None
 
 def execute_sql(sql_query):
     """Execute SQL query and return results."""
@@ -459,45 +438,6 @@ def calculate_kpis(df, kpi_structure):
     
     return kpi_values
 
-def add_forecast_to_chart_data(chart_data, y_axis_name, periods=12):
-    import numpy as np
-    print(f"\n--- [FORECAST ENGINE] Checking if forecast can be applied for {y_axis_name} ---")
-    if not chart_data or len(chart_data) < 2:
-        print(f"❌ Forecast skipped: Not enough data points (Found {len(chart_data) if chart_data else 0}).")
-        return chart_data
-        
-    try:
-        y_vals = [float(row.get(y_axis_name, 0)) for row in chart_data]
-        x_vals = np.arange(len(y_vals))
-        
-        # Linear regression
-        coef = np.polyfit(x_vals, y_vals, 1)
-        poly1d_fn = np.poly1d(coef)
-        
-        future_x_indices = np.arange(len(y_vals), len(y_vals) + periods)
-        future_y_vals = poly1d_fn(future_x_indices)
-        
-        new_data = list(chart_data)
-        # Mark historical data
-        for row in new_data:
-            row['is_forecast'] = False
-            
-        # Append forecast data
-        # Try to find the x_axis key
-        x_axis_key = [k for k in new_data[0].keys() if k != y_axis_name and k != 'is_forecast'][0]
-        
-        for i, future_y in enumerate(future_y_vals):
-            new_row = dict(new_data[-1]) # copy keys structure
-            new_row[y_axis_name] = max(0, future_y) # prevent negative predictions
-            new_row['is_forecast'] = True
-            new_row[x_axis_key] = f"Future +{i+1}"
-            new_data.append(new_row)
-            
-        print(f"✅ FORECASTING IS WORKING: Successfully generated {periods} future data points for {y_axis_name}!")
-        return new_data
-    except Exception as e:
-        print(f"Error generating forecast: {e}")
-        return chart_data
 
 def generate_chart_data(df, kpi_structure):
     """Generate data for all charts based on KPI structure."""
@@ -542,14 +482,6 @@ def generate_chart_data(df, kpi_structure):
             # Convert to list of dicts
             chart_data = grouped.to_dict('records')
             
-            # Apply forecasting if requested
-            is_forecast = chart_config.get('is_forecast', False)
-            if is_forecast:
-                chart_data = add_forecast_to_chart_data(chart_data, y_axis)
-            else:
-                 for row in chart_data:
-                      row['is_forecast'] = False
-            
             chart_data_list.append({
                 'type': chart_config['type'],
                 'title': chart_config['title'],
@@ -569,15 +501,12 @@ def generate_chart_data(df, kpi_structure):
 def generate_kpi_structure_with_ai(table_name, schema, data_profile, sample_data):
     """Use AI to determine the most relevant KPIs (with HF Fallback)."""
     
-    custom_prompt = get_custom_table_prompt(table_name)
-    custom_prompt_text = f"\n\nCRITICAL USER INSTRUCTION FOR THIS TABLE:\n{custom_prompt}\nYou MUST follow this instruction carefully when generating the KPIs and charts." if custom_prompt else ""
-
     prompt = f"""You are a data analytics expert. Analyze this database table and determine the most relevant KPIs.
 
 Table Name: {table_name}
 Schema: {schema}
 Data Profile: {json.dumps(data_profile, indent=2)}
-Sample Data: {sample_data}{custom_prompt_text}
+Sample Data: {sample_data}
 
 Respond ONLY with valid JSON in this exact structure:
 {{
@@ -600,8 +529,7 @@ Respond ONLY with valid JSON in this exact structure:
       "y_axis": "column_name",
       "aggregation": "sum|count|avg|min|max|distinct count",
       "description": "Insight provided",
-      "limit": 10,
-      "is_forecast": false // Set TRUE ONLY if the user instructions ask for prediction/forecast
+      "limit": 10
     }}
   ],
   "trends": [],
@@ -680,11 +608,10 @@ def query_huggingface(prompt, max_new_tokens=1024, system_prompt=None):
     
     # OpenAI Format
     payload = {
-        "model": "meta-llama/Meta-Llama-3-70B-Instruct", # Upgraded to 70B for much higher accuracy
+        "model": "meta-llama/Meta-Llama-3-8B-Instruct", 
         "messages": messages,
         "max_tokens": max_new_tokens,
-        "temperature": 0.1, # Lowered from 0.3 for more deterministic/focused output
-        "top_p": 0.9
+        "temperature": 0.3 # Lower temp for more deterministic/focused output
     }
     
     try:
@@ -778,15 +705,12 @@ def generate_content_with_fallback(prompt, config=None, json_mode=False):
 
 def generate_sql_with_gemini(question, schema, table_name):
     """Generate SQL using Google Gemini API (with HF Fallback)."""
-    custom_prompt = get_custom_table_prompt(table_name)
-    custom_prompt_text = f"\nCRITICAL USER INSTRUCTION FOR THIS TABLE:\n{custom_prompt}\nYou MUST follow this instruction carefully when interpreting the question and generating the SQL." if custom_prompt else ""
-
     prompt = f"""You are an expert SQL agent who generates optimized PostgreSQL queries.
     
 Database Schema:
 {schema}
 
-Question: {question}{custom_prompt_text}
+Question: {question}
 
 Instructions:
 1. Analyze the question carefully
@@ -849,8 +773,6 @@ Answer:"""
 
 def generate_business_insights(table_name, schema, data_summary, focus_area, sample_data):
     """Generate AI-powered business insights (with HF Fallback)."""
-    custom_prompt = get_custom_table_prompt(table_name)
-    custom_prompt_text = f"\n\nCRITICAL USER INSTRUCTION FOR THIS TABLE:\n{custom_prompt}\nYou MUST follow this instruction carefully when generating insights and recommendations." if custom_prompt else ""
     
     prompt = f"""You are an expert business analyst and data scientist. Analyze the following database table and provide actionable insights.
 
@@ -872,7 +794,7 @@ def generate_business_insights(table_name, schema, data_summary, focus_area, sam
                 Sample Data Preview:
                 {sample_data}
 
-                Focus Area: {focus_area}{custom_prompt_text}
+                Focus Area: {focus_area}
 
                 Please provide:
                 1. **Key Findings**
@@ -924,8 +846,6 @@ def generate_contextual_chat_response(user_message, table_name, schema, context,
     """Generate contextual AI responses (with HF Fallback)."""
     
     context_str = json.dumps(context, indent=2) if context else "No additional context"
-    custom_prompt = get_custom_table_prompt(table_name)
-    custom_prompt_text = f"\n\nCRITICAL USER INSTRUCTION FOR THIS TABLE:\n{custom_prompt}\nYou MUST follow this instruction carefully when responding to the user." if custom_prompt else ""
     
     prompt = f"""You are an AI business advisor integrated into a data analytics dashboard. 
 
@@ -940,7 +860,7 @@ Sample Data:
 Dashboard Context:
 {context_str}
 
-User Message: {user_message}{custom_prompt_text}
+User Message: {user_message}
 
 Provide a helpful, actionable response that:
 1. Directly addresses the user's question or concern
@@ -1071,15 +991,6 @@ def generate_kpi_dashboard(table_name):
         # Calculate actual KPI values based on AI recommendations
         kpi_values = calculate_kpis(full_df, kpi_structure)
         
-        # Enforce forecasting if the custom prompt demands it and AI missed it
-        custom_prompt = get_custom_table_prompt(table_name)
-        if custom_prompt and any(word in custom_prompt.lower() for word in ['predict', 'forecast', 'future']):
-            for chart in kpi_structure.get('charts', []):
-                # Apply forecast to time-series looking charts if not already set
-                if chart.get('type') in ['line', 'bar', 'area'] and not chart.get('is_forecast'):
-                    chart['is_forecast'] = True
-                    break # Apply to just the first relevant chart to avoid predicting everything
-                    
         # Generate visualizations data
         chart_data = generate_chart_data(full_df, kpi_structure)
         
@@ -1189,8 +1100,7 @@ Respond ONLY with valid JSON in this exact structure:
       "description": "Insight provided",
       "x_axis": "column_for_x",
       "y_axis": "column_for_y",
-      "sql": "SELECT category AS column_for_x, COUNT(*) AS column_for_y FROM table1 GROUP BY category LIMIT 10",
-      "is_forecast": false // Set TRUE ONLY if the user instructions asked for prediction/forecast
+      "sql": "SELECT category AS column_for_x, COUNT(*) AS column_for_y FROM table1 GROUP BY category LIMIT 10"
     }}
   ]
 }}"""
@@ -1232,23 +1142,12 @@ Respond ONLY with valid JSON in this exact structure:
                 'change_direction': 'neutral'
             })
                 
-        # Enforce forecasting if the custom prompt demands it and AI missed it
-        # Since group dash might not have a single table prompt, we could skip it or apply similar logic
-        # For this fix, checking primarily the single table dashboard is what the user is testing.
-
         chart_data_list = []
         for chart in kpi_structure.get('charts', []):
             try:
                 df, err = execute_sql(chart['sql'])
                 if not err and df is not None and not df.empty:
                     chart_data = df.to_dict('records')
-                    
-                    if chart.get('is_forecast', False):
-                        chart_data = add_forecast_to_chart_data(chart_data, chart.get('y_axis', 'y'))
-                    else:
-                        for row in chart_data:
-                            row['is_forecast'] = False
-                            
                     chart_data_list.append({
                         'type': chart.get('type', 'bar'),
                         'title': chart.get('title', 'Chart'),

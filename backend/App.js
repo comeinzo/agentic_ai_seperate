@@ -397,11 +397,7 @@ export default function KPIDashboard() {
                 labelStyle={{ color: '#f3f4f6' }}
               />
               <Legend />
-              <Bar dataKey={y_axis} radius={[8, 8, 0, 0]} onClick={handleDataClick} cursor="pointer">
-                {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.is_forecast ? '#a855f7' : '#3b82f6'} />
-                ))}
-              </Bar>
+              <Bar dataKey={y_axis} fill="#3b82f6" radius={[8, 8, 0, 0]} onClick={handleDataClick} cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -418,18 +414,7 @@ export default function KPIDashboard() {
                 labelStyle={{ color: '#f3f4f6' }}
               />
               <Legend />
-              <Line 
-                type="monotone" 
-                dataKey={y_axis} 
-                stroke="#3b82f6" 
-                strokeWidth={2} 
-                dot={(props) => {
-                  const { cx, cy, payload } = props;
-                  const isForecast = payload && payload.is_forecast;
-                  return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={isForecast ? 5 : 4} fill={isForecast ? '#a855f7' : '#3b82f6'} stroke="none" />;
-                }}
-                activeDot={{ onClick: (e, payload) => handleDataClick(payload ? payload.payload : {}), cursor: 'pointer' }} 
-              />
+              <Line type="monotone" dataKey={y_axis} stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6' }} activeDot={{ onClick: (e, payload) => handleDataClick(payload ? payload.payload : {}), cursor: 'pointer' }} />
             </LineChart>
           </ResponsiveContainer>
         );
@@ -446,20 +431,7 @@ export default function KPIDashboard() {
                 labelStyle={{ color: '#f3f4f6' }}
               />
               <Legend />
-              <Area 
-                type="monotone" 
-                dataKey={y_axis} 
-                stroke="#3b82f6" 
-                fill="#3b82f6" 
-                fillOpacity={0.6}
-                dot={(props) => {
-                  const { cx, cy, payload } = props;
-                  const isForecast = payload && payload.is_forecast;
-                  if (!isForecast) return null; // Only show dots for forecast to stand out on Area charts
-                  return <circle key={`area-dot-${cx}-${cy}`} cx={cx} cy={cy} r={4} fill="#a855f7" stroke="#fff" strokeWidth={2} />;
-                }}
-                activeDot={{ onClick: (e, payload) => handleDataClick(payload ? payload.payload : {}), cursor: 'pointer' }} 
-              />
+              <Area type="monotone" dataKey={y_axis} stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} activeDot={{ onClick: (e, payload) => handleDataClick(payload ? payload.payload : {}), cursor: 'pointer' }} />
             </AreaChart>
           </ResponsiveContainer>
         );
